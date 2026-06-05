@@ -15,19 +15,20 @@ const QB_LINK    = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIs
 const ESX_LINK   = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
 const TEST_LINK  = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
 const MAP_LEGION = "https://drive.google.com/file/d/1eSXk-LoSRQLePnNMnOND85esrWjqjFBE/view?usp=sharing";
-
+const MAP_RIDGECREST = "https://drive.google.com/file/d/1Sd1rdouqjELVnC0OfKKDgUfAFdKh3oRZ/view?usp=sharing";
 const PRODUCTS = {
-  "test-product":    { name: "TEST - Do Not Buy",              price: 100,  fw: "TEST",   downloadUrl: TEST_LINK  },
   "trapv6-esx":      { name: "Slayer-TrapV6 ESX",             price: 6000, fw: "ESX",    downloadUrl: ESX_LINK   },
   "trapv6-qb":       { name: "Slayer-TrapV6 QB",              price: 6000, fw: "QBCore", downloadUrl: QB_LINK    },
   "trapv6-esx-os":   { name: "Slayer-TrapV6 ESX Open Source", price: 9000, fw: "ESX",    downloadUrl: ESX_LINK   },
   "trapv6-qb-os":    { name: "Slayer-TrapV6 QB Open Source",  price: 9000, fw: "QBCore", downloadUrl: QB_LINK    },
-  "legion-oaks-map": { name: "Slayer Legion Square",               price: 2999, fw: "FiveM",  downloadUrl: MAP_LEGION },
+  "legion-oaks-map": { name: "Slayer Legion Square",               price: 4000, fw: "FiveM",  downloadUrl: MAP_LEGION },
+  "ridgecrest-map": { name: "Slayer Ridge Crest",               price: 3500, fw: "FiveM",  downloadUrl: MAP_RIDGECREST },
 };
 
 // Also support Stripe payment link lookups (for direct payment links)
 const STRIPE_LINK_PRODUCTS = {
   "https://buy.stripe.com/aFa4gA9TVdx78wuf4D7wA05": "legion-oaks-map",
+  "https://buy.stripe.com/00waEYc2378JeUS7Cb7wA06": "ridgecrest-map",  
 };
 
 app.use(cors({ origin: "*" }));

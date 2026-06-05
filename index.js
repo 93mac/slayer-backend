@@ -11,21 +11,62 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SITE_URL = process.env.SITE_URL || "https://cfxslayer.com";
 const FROM_EMAIL = "orders@cfxslayer.com";
 
-const QB_LINK = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIsGG-RM/view?usp=drive_link";
-const ESX_LINK = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
-const TEST_LINK = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
+const QB_LINK    = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIsGG-RM/view?usp=drive_link";
+const ESX_LINK   = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
+const TEST_LINK  = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
+const MAP_LEGION = "https://drive.google.com/file/d/1eSXk-LoSRQLePnNMnOND85esrWjqjFBE/view?usp=sharing";
 
 const PRODUCTS = {
-  "test-product":  { name: "TEST - Do Not Buy",              price: 100,  fw: "TEST",   downloadUrl: TEST_LINK },
-  "trapv6-esx":    { name: "Slayer-TrapV6 ESX",             price: 6000, fw: "ESX",    downloadUrl: ESX_LINK },
-  "trapv6-qb":     { name: "Slayer-TrapV6 QB",              price: 6000, fw: "QBCore", downloadUrl: QB_LINK  },
-  "trapv6-esx-os": { name: "Slayer-TrapV6 ESX Open Source", price: 9000, fw: "ESX",    downloadUrl: ESX_LINK },
-  "trapv6-qb-os":  { name: "Slayer-TrapV6 QB Open Source",  price: 9000, fw: "QBCore", downloadUrl: QB_LINK  },
+  "test-product":    { name: "TEST - Do Not Buy",              price: 100,  fw: "TEST",   downloadUrl: TEST_LINK  },
+  "trapv6-esx":      { name: "Slayer-TrapV6 ESX",             price: 6000, fw: "ESX",    downloadUrl: ESX_LINK   },
+  "trapv6-qb":       { name: "Slayer-TrapV6 QB",              price: 6000, fw: "QBCore", downloadUrl: QB_LINK    },
+  "trapv6-esx-os":   { name: "Slayer-TrapV6 ESX Open Source", price: 9000, fw: "ESX",    downloadUrl: ESX_LINK   },
+  "trapv6-qb-os":    { name: "Slayer-TrapV6 QB Open Source",  price: 9000, fw: "QBCore", downloadUrl: QB_LINK    },
+  "legion-oaks-map": { name: "Slayer Legion Square",               price: 2999, fw: "FiveM",  downloadUrl: MAP_LEGION },
+};
+
+// Also support Stripe payment link lookups (for direct payment links)
+const STRIPE_LINK_PRODUCTS = {
+  "https://buy.stripe.com/aFa4gA9TVdx78wuf4D7wA05": "legion-oaks-map",
 };
 
 app.use(cors({ origin: "*" }));
 app.use("/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
+
+async function sendDeliveryEmail(to, productName, downloadUrl, discordUser) {
+  console.log("Sending email to:", to, "for product:", productName);
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: FROM_EMAIL,
+      to,
+      subject: `Your purchase: ${productName} — Slayer Store`,
+      html: `
+        <div style="background:#0c0c0d;color:#f2f2f2;font-family:sans-serif;padding:40px;max-width:560px;margin:0 auto;border-radius:12px;">
+          <h1 style="color:#39ff14;font-size:28px;margin-bottom:8px;">⚡ Payment Confirmed!</h1>
+          <p style="color:#aaa;margin-bottom:24px;">Thanks for your purchase from <strong style="color:#f2f2f2;">Slayer Store</strong>.</p>
+          <div style="background:#1a1a1d;border:1px solid #333;border-radius:8px;padding:20px;margin-bottom:24px;">
+            <p style="margin:0 0 8px;color:#aaa;font-size:13px;">YOUR PRODUCT</p>
+            <p style="margin:0;font-size:18px;font-weight:700;">${productName}</p>
+          </div>
+          <a href="${downloadUrl}" style="display:inline-block;background:#39ff14;color:#0c0c0d;font-weight:800;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;margin-bottom:24px;">⬇ Download Now</a>
+          <p style="color:#666;font-size:13px;">Discord: ${discordUser || "Not provided"}</p>
+          <p style="color:#666;font-size:13px;">Need help? Join our Discord for support.</p>
+          <hr style="border-color:#222;margin:24px 0;">
+          <p style="color:#444;font-size:12px;">cfxslayer.com · Slayer Scripts</p>
+        </div>
+      `,
+    }),
+  });
+  const data = await res.json();
+  console.log("Resend response:", JSON.stringify(data));
+  return data;
+}
 
 // Create Stripe checkout session
 app.post("/create-checkout", async (req, res) => {
@@ -40,116 +81,66 @@ app.post("/create-checkout", async (req, res) => {
       line_items: [{
         price_data: {
           currency: "usd",
-          product_data: {
-            name: product.name,
-            description: `FiveM Script — Framework: ${product.fw}`,
-          },
+          product_data: { name: product.name },
           unit_amount: product.price,
         },
         quantity: 1,
       }],
       mode: "payment",
-      success_url: `${SITE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: SITE_URL,
-      metadata: { productId, productName: product.name },
+      success_url: `${SITE_URL}/success.html`,
+      cancel_url: `${SITE_URL}/`,
       custom_fields: [{
         key: "discord_username",
-        label: { type: "custom", custom: "Discord Username (for support)" },
+        label: { type: "custom", custom: "Discord Username" },
         type: "text",
         optional: true,
       }],
+      metadata: { productId },
     });
+
     console.log("Checkout session created:", session.id);
     res.json({ url: session.url });
   } catch (err) {
-    console.error("Checkout error:", err);
+    console.error("Stripe error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Send delivery email via Resend
-async function sendDeliveryEmail(toEmail, productName, downloadUrl, discordUser) {
-  console.log("Sending email to:", toEmail, "for:", productName);
-  if (!RESEND_API_KEY) {
-    console.error("No RESEND_API_KEY set!");
-    return;
-  }
-
-  const html = `
-    <div style="background:#0c0c0d;color:#f2f2f2;font-family:Inter,sans-serif;padding:40px;max-width:600px;margin:0 auto;border-radius:16px">
-      <h1 style="color:#39ff14;font-size:32px;margin-bottom:8px">⚡ Your Script is Ready!</h1>
-      <p style="color:rgba(255,255,255,0.6);margin-bottom:24px">Thank you for purchasing from <strong style="color:#f2f2f2">Slayer Store</strong></p>
-      
-      <div style="background:#141416;border:1px solid rgba(57,255,20,0.2);border-radius:12px;padding:24px;margin-bottom:24px">
-        <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:4px">PRODUCT</p>
-        <p style="font-size:18px;font-weight:700;margin-bottom:16px">${productName}</p>
-        <a href="${downloadUrl}" style="display:inline-block;background:#39ff14;color:#0c0c0d;font-weight:800;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:15px">
-          ⬇ Download Your Script
-        </a>
-      </div>
-
-      <div style="background:#141416;border-radius:12px;padding:20px;margin-bottom:24px">
-        <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:8px">NEED HELP?</p>
-        <p style="color:rgba(255,255,255,0.7);font-size:14px">
-          Join our Discord and open a support ticket. Your Discord username: <strong style="color:#f2f2f2">${discordUser || "Not provided"}</strong>
-        </p>
-      </div>
-
-      <p style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center">
-        Slayer Store · cfxslayer.com · Premium FiveM Resources
-      </p>
-    </div>
-  `;
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: `Slayer Store <${FROM_EMAIL}>`,
-      to: toEmail,
-      subject: `⚡ Your ${productName} is ready to download!`,
-      html,
-    }),
-  });
-
-  const result = await response.json();
-  console.log("Resend response:", JSON.stringify(result));
-}
-
 // Stripe webhook
 app.post("/webhook", async (req, res) => {
-  console.log("Webhook received");
   const sig = req.headers["stripe-signature"];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let event;
+
+  console.log("Webhook received at", new Date().toISOString());
+
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    console.log("Webhook event type:", event.type);
+    event = webhookSecret
+      ? stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+      : JSON.parse(req.body.toString());
   } catch (err) {
     console.error("Webhook signature error:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  console.log("Event type:", event.type);
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
+    console.log("Session metadata:", JSON.stringify(session.metadata));
+
     const productId = session.metadata?.productId;
     const product = PRODUCTS[productId];
     const email = session.customer_details?.email;
-    const discordUser = session.custom_fields?.[0]?.text?.value || "Not provided";
+    const discordUser = session.custom_fields?.find(f => f.key === "discord_username")?.text?.value || "Not provided";
     const amount = (session.amount_total / 100).toFixed(2);
 
-    console.log("Sale completed - Product:", productId, "Email:", email, "Amount:", amount);
+    console.log("Product found:", !!product, "Email:", !!email);
 
-    // Send delivery email
     if (product && email) {
       await sendDeliveryEmail(email, product.name, product.downloadUrl, discordUser);
-    } else {
-      console.log("Skipping email - product:", !!product, "email:", !!email);
     }
 
-    // Notify Discord
     if (DISCORD_WEBHOOK) {
       await fetch(DISCORD_WEBHOOK, {
         method: "POST",
@@ -159,11 +150,11 @@ app.post("/webhook", async (req, res) => {
             title: "💰 New Sale!",
             color: 0x39ff14,
             fields: [
-              { name: "Product", value: product?.name || productId, inline: true },
+              { name: "Product", value: product?.name || productId || "Unknown", inline: true },
               { name: "Amount", value: `$${amount}`, inline: true },
               { name: "Email", value: email || "N/A", inline: false },
               { name: "Discord", value: discordUser, inline: false },
-              { name: "Delivery", value: "✅ Email sent automatically", inline: false },
+              { name: "Delivery", value: product && email ? "✅ Email sent automatically" : "⚠️ Could not send email", inline: false },
             ],
             footer: { text: "Slayer Store" },
             timestamp: new Date().toISOString(),

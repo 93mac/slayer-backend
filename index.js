@@ -12,23 +12,29 @@ const SITE_URL = process.env.SITE_URL || "https://cfxslayer.com";
 const FROM_EMAIL = "orders@cfxslayer.com";
 const BACKEND_URL = process.env.BACKEND_URL || "https://slayer-backend-rztw.onrender.com";
 
-const QB_LINK       = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIsGG-RM/view?usp=drive_link";
-const ESX_LINK      = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
-const TEST_LINK     = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
-const MAP_LEGION    = "https://drive.google.com/file/d/1eSXk-LoSRQLePnNMnOND85esrWjqjFBE/view?usp=sharing";
+const QB_LINK        = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIsGG-RM/view?usp=drive_link";
+const ESX_LINK       = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
+const TEST_LINK      = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
+const MAP_LEGION     = "https://drive.google.com/file/d/1eSXk-LoSRQLePnNMnOND85esrWjqjFBE/view?usp=sharing";
 const MAP_RIDGECREST = "https://drive.google.com/file/d/1Sd1rdouqjELVnC0OfKKDgUfAFdKh3oRZ/view?usp=sharing";
 
 const PRODUCTS = {
+  "test-product":    { name: "TEST - Do Not Buy",             price: 100,  fw: "TEST",   downloadUrl: TEST_LINK       },
   "trapv6-esx":      { name: "Slayer-TrapV6 ESX",             price: 6000, fw: "ESX",    downloadUrl: ESX_LINK        },
   "trapv6-qb":       { name: "Slayer-TrapV6 QB",              price: 6000, fw: "QBCore", downloadUrl: QB_LINK         },
   "trapv6-esx-os":   { name: "Slayer-TrapV6 ESX Open Source", price: 9000, fw: "ESX",    downloadUrl: ESX_LINK        },
   "trapv6-qb-os":    { name: "Slayer-TrapV6 QB Open Source",  price: 9000, fw: "QBCore", downloadUrl: QB_LINK         },
   "legion-oaks-map": { name: "Slayer Legion Square",          price: 4000, fw: "FiveM",  downloadUrl: MAP_LEGION      },
   "ridgecrest-map":  { name: "Slayer Ridge Crest",            price: 3500, fw: "FiveM",  downloadUrl: MAP_RIDGECREST  },
-  "test-product":    { name: "TEST - Do Not Buy",             price: 100,  fw: "TEST",   downloadUrl: TEST_LINK       },
 };
 
+// Maps direct Stripe payment links → product IDs
+// These cover purchases made via direct Stripe links (no backend checkout session)
 const STRIPE_LINK_PRODUCTS = {
+  "https://buy.stripe.com/dRm9AUfef0KlfYW3lV7wA00": "trapv6-esx",
+  "https://buy.stripe.com/cNi4gA2rt0KlfYW6y77wA01": "trapv6-qb",
+  "https://buy.stripe.com/fZu9AU0jl9gR6omaOn7wA02": "trapv6-esx-os",
+  "https://buy.stripe.com/8x24gAeab50Bh301dN7wA03": "trapv6-qb-os",
   "https://buy.stripe.com/aFa4gA9TVdx78wuf4D7wA05": "legion-oaks-map",
   "https://buy.stripe.com/00waEYc2378JeUS7Cb7wA06": "ridgecrest-map",
 };
@@ -41,8 +47,8 @@ app.use(express.json());
 setInterval(() => {
   fetch(`${BACKEND_URL}/ping`)
     .then(() => console.log("Keep-alive ping sent"))
-    .catch(() => console.log("Keep-alive ping failed (safe to ignore)"));
-}, 10 * 60 * 1000); // every 10 minutes
+    .catch(() => {});
+}, 10 * 60 * 1000);
 
 async function sendDeliveryEmail(to, productName, downloadUrl, discordUser) {
   console.log("Sending email to:", to, "for product:", productName);
@@ -138,14 +144,26 @@ app.post("/webhook", async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     console.log("Session metadata:", JSON.stringify(session.metadata));
+    console.log("Payment link:", session.payment_link);
 
-    const productId = session.metadata?.productId;
+    // Get product — first try metadata (backend checkout), then payment link (direct Stripe link)
+    let productId = session.metadata?.productId;
+    if (!productId && session.payment_link) {
+      // Resolve short payment link to full URL if needed
+      const linkId = session.payment_link;
+      // Try direct match first, then search by link ID suffix
+      productId = Object.entries(STRIPE_LINK_PRODUCTS).find(([url]) =>
+        url.includes(linkId) || linkId.includes(url.split("/").pop())
+      )?.[1];
+      console.log("Resolved product from payment link:", productId);
+    }
+
     const product = PRODUCTS[productId];
     const email = session.customer_details?.email;
     const discordUser = session.custom_fields?.find(f => f.key === "discord_username")?.text?.value || "Not provided";
     const amount = (session.amount_total / 100).toFixed(2);
 
-    console.log("Product found:", !!product, "Email:", !!email);
+    console.log("Product found:", !!product, "Email:", !!email, "ProductId:", productId);
 
     if (product && email) {
       await sendDeliveryEmail(email, product.name, product.downloadUrl, discordUser);

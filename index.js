@@ -10,30 +10,39 @@ const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SITE_URL = process.env.SITE_URL || "https://cfxslayer.com";
 const FROM_EMAIL = "orders@cfxslayer.com";
+const BACKEND_URL = process.env.BACKEND_URL || "https://slayer-backend-rztw.onrender.com";
 
-const QB_LINK    = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIsGG-RM/view?usp=drive_link";
-const ESX_LINK   = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
-const TEST_LINK  = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
-const MAP_LEGION = "https://drive.google.com/file/d/1eSXk-LoSRQLePnNMnOND85esrWjqjFBE/view?usp=sharing";
+const QB_LINK       = "https://drive.google.com/file/d/15R6MhaYUQeFjCGIOQBHI50fXdIsGG-RM/view?usp=drive_link";
+const ESX_LINK      = "https://drive.google.com/file/d/16AKegXe8fbhyznD8tT12vgtI02tSQyNE/view?usp=drive_link";
+const TEST_LINK     = "https://drive.google.com/file/d/1JMQBhbLtbPM-46aYDphIq_XxLQGDEzkt/view?usp=drive_link";
+const MAP_LEGION    = "https://drive.google.com/file/d/1eSXk-LoSRQLePnNMnOND85esrWjqjFBE/view?usp=sharing";
 const MAP_RIDGECREST = "https://drive.google.com/file/d/1Sd1rdouqjELVnC0OfKKDgUfAFdKh3oRZ/view?usp=sharing";
+
 const PRODUCTS = {
-  "trapv6-esx":      { name: "Slayer-TrapV6 ESX",             price: 6000, fw: "ESX",    downloadUrl: ESX_LINK   },
-  "trapv6-qb":       { name: "Slayer-TrapV6 QB",              price: 6000, fw: "QBCore", downloadUrl: QB_LINK    },
-  "trapv6-esx-os":   { name: "Slayer-TrapV6 ESX Open Source", price: 9000, fw: "ESX",    downloadUrl: ESX_LINK   },
-  "trapv6-qb-os":    { name: "Slayer-TrapV6 QB Open Source",  price: 9000, fw: "QBCore", downloadUrl: QB_LINK    },
-  "legion-oaks-map": { name: "Slayer Legion Square",               price: 4000, fw: "FiveM",  downloadUrl: MAP_LEGION },
-  "ridgecrest-map": { name: "Slayer Ridge Crest",               price: 3500, fw: "FiveM",  downloadUrl: MAP_RIDGECREST },
+  "trapv6-esx":      { name: "Slayer-TrapV6 ESX",             price: 6000, fw: "ESX",    downloadUrl: ESX_LINK        },
+  "trapv6-qb":       { name: "Slayer-TrapV6 QB",              price: 6000, fw: "QBCore", downloadUrl: QB_LINK         },
+  "trapv6-esx-os":   { name: "Slayer-TrapV6 ESX Open Source", price: 9000, fw: "ESX",    downloadUrl: ESX_LINK        },
+  "trapv6-qb-os":    { name: "Slayer-TrapV6 QB Open Source",  price: 9000, fw: "QBCore", downloadUrl: QB_LINK         },
+  "legion-oaks-map": { name: "Slayer Legion Square",          price: 4000, fw: "FiveM",  downloadUrl: MAP_LEGION      },
+  "ridgecrest-map":  { name: "Slayer Ridge Crest",            price: 3500, fw: "FiveM",  downloadUrl: MAP_RIDGECREST  },
+  "test-product":    { name: "TEST - Do Not Buy",             price: 100,  fw: "TEST",   downloadUrl: TEST_LINK       },
 };
 
-// Also support Stripe payment link lookups (for direct payment links)
 const STRIPE_LINK_PRODUCTS = {
   "https://buy.stripe.com/aFa4gA9TVdx78wuf4D7wA05": "legion-oaks-map",
-  "https://buy.stripe.com/00waEYc2378JeUS7Cb7wA06": "ridgecrest-map",  
+  "https://buy.stripe.com/00waEYc2378JeUS7Cb7wA06": "ridgecrest-map",
 };
 
 app.use(cors({ origin: "*" }));
 app.use("/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
+
+// Keep-alive ping — prevents Render free tier from sleeping
+setInterval(() => {
+  fetch(`${BACKEND_URL}/ping`)
+    .then(() => console.log("Keep-alive ping sent"))
+    .catch(() => console.log("Keep-alive ping failed (safe to ignore)"));
+}, 10 * 60 * 1000); // every 10 minutes
 
 async function sendDeliveryEmail(to, productName, downloadUrl, discordUser) {
   console.log("Sending email to:", to, "for product:", productName);
@@ -168,7 +177,11 @@ app.post("/webhook", async (req, res) => {
   res.json({ received: true });
 });
 
+app.get("/ping", (req, res) => res.json({ status: "ok" }));
 app.get("/", (req, res) => res.json({ status: "Slayer backend running" }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log("Keep-alive ping active — server will not sleep");
+});
